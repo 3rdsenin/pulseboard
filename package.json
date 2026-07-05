@@ -1,0 +1,23 @@
+{
+  "name": "pulseboard",
+  "private": true,
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint",
+    "db:migrate": "pnpm --filter api db:migrate",
+    "db:rollback": "pnpm --filter api db:rollback",
+    "db:seed": "pnpm --filter api db:seed"
+  },
+  "devDependencies": {
+    "turbo": "latest",
+    "typescript": "^5.5.0"
+  },
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.0.0"
+}
