@@ -7,7 +7,7 @@ import { requireProjectRole } from '../../middleware/project-role.js';
 
 const UpsertRatingSchema = z.object({
   segmentDefinitionId: z.string().uuid(),
-  value: z.unknown(),
+  value: z.union([z.number(), z.string()]),
   notes: z.string().max(1000).optional(),
 });
 

@@ -12,7 +12,7 @@ export class OrgService {
       .first('id', 'name', 'slug', 'plan', 'created_at');
   }
 
-  async updateOrg(organizationId: string, name: string, actorId: string) {
+  async updateOrg(organizationId: string, name: string, _actorId: string) {
     const [updated] = await db('organizations')
       .where({ id: organizationId, deleted_at: null })
       .update({ name, updated_at: db.fn.now() })

@@ -75,7 +75,7 @@ export default async function orgRoutes(app: FastifyInstance): Promise<void> {
   // POST /orgs/invites/accept — called by the invited user after clicking the email link
   app.post('/invites/accept', {
     schema: { body: zodToJsonSchema(AcceptInviteSchema) },
-  }, async (request, reply) => {
+  }, async (request) => {
     const { token } = AcceptInviteSchema.parse(request.body);
     const result = await orgService.acceptInvite(token, request.context.userId);
     return result;

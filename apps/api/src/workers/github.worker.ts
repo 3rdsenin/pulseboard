@@ -41,7 +41,6 @@ async function processGitHubSync(job: Job<GitHubSyncJobData>) {
 
     // Match commits to contributors by github_username or author email alias.
     // Unmatched commits are stored with null contributor — the metrics worker skips them.
-    let matched = 0;
     for (const commit of commits) {
       const contributor = await db('contributors')
         .where({ organization_id: organizationId, project_id: projectId, deleted_at: null })
@@ -54,8 +53,6 @@ async function processGitHubSync(job: Job<GitHubSyncJobData>) {
             );
         })
         .first('id');
-
-      if (contributor) matched++;
 
       // Commits are lightweight reference data — stored as raw JSON in contributor_sprint_metrics
       // via the metrics worker; we don't create a separate commit table to keep schema lean.

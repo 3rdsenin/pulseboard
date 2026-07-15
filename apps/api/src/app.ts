@@ -1,4 +1,4 @@
-import Fastify from 'fastify';
+import Fastify, { type FastifyError } from 'fastify';
 import fastifyCookie from '@fastify/cookie';
 import fastifyCors from '@fastify/cors';
 import fastifyRateLimit from '@fastify/rate-limit';
@@ -72,8 +72,8 @@ export async function buildApp() {
   app.get('/health', async () => ({ ok: true }));
 
   // Normalise service-layer errors (statusCode property) into RFC 9457 Problem Details
-  app.setErrorHandler(async (error, request, reply) => {
-    const status = (error as { statusCode?: number }).statusCode ?? 500;
+  app.setErrorHandler<FastifyError>(async (error, request, reply) => {
+    const status = error.statusCode ?? 500;
     if (status >= 500) {
       request.log.error(error);
     }
