@@ -1,26 +1,33 @@
 import type { FastifyInstance } from 'fastify';
-import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
+import { CreateIntegrationSchema, UpdateIntegrationSchema, TestConnectionSchema } from '@pulseboard/shared';
 import { IntegrationService } from '../../services/integration.service.js';
+import { JiraAdapter } from '../../adapters/jira.adapter.js';
+import { GitHubAdapter } from '../../adapters/github.adapter.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { requireProjectRole } from '../../middleware/project-role.js';
 
-const CreateIntegrationSchema = z.object({
-  type: z.enum(['JIRA', 'GITHUB', 'GITLAB', 'LINEAR']),
-  config: z.record(z.unknown()),
-  // credentials are validated here but encrypted before storage — never logged or returned
-  credentials: z.record(z.string()),
-});
-
-const UpdateIntegrationSchema = z.object({
-  config: z.record(z.unknown()).optional(),
-  credentials: z.record(z.string()).optional(),
-});
+const adapters = {
+  JIRA: new JiraAdapter(),
+  GITHUB: new GitHubAdapter(),
+};
 
 export default async function integrationRoutes(app: FastifyInstance): Promise<void> {
   const integrationService = new IntegrationService();
 
   app.addHook('preHandler', requireAuth);
+
+  // Validates credentials against the real provider API before anything is saved —
+  // the IntegrationAdapter interface (PB-ADR-005) always had testConnection(), but no
+  // route ever called it.
+  app.post('/:projectId/integrations/test-connection', {
+    schema: { body: zodToJsonSchema(TestConnectionSchema) },
+    preHandler: [requireProjectRole('PROJECT_ADMIN')],
+  }, async (request) => {
+    const input = TestConnectionSchema.parse(request.body);
+    const adapter = adapters[input.type];
+    return adapter.testConnection({ type: input.type, ...input.config }, input.credentials);
+  });
 
   // All integration routes are scoped to a project; PROJECT_VIEWER can read, PROJECT_ADMIN can write
   app.get('/:projectId/integrations', {

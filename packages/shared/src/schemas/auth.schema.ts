@@ -5,7 +5,7 @@ export const RegisterSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8).max(128),
   organizationName: z.string().min(1).max(255),
-  organizationSlug: z.string().min(2).max(63).regex(/^[a-z0-9-]+$/),
+  organizationSlug: z.string().min(2).max(63).regex(/^[a-z0-9-]+$/, 'Lowercase letters, numbers, and hyphens only'),
 });
 
 export const LoginSchema = z.object({

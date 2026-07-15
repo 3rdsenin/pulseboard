@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const CreateProjectSchema = z.object({
   name: z.string().min(1).max(255),
-  slug: z.string().min(2).max(63).regex(/^[a-z0-9-]+$/),
+  slug: z.string().min(2).max(63).regex(/^[a-z0-9-]+$/, 'Lowercase letters, numbers, and hyphens only'),
   syncCron: z.string().optional(),
 });
 

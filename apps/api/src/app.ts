@@ -4,6 +4,7 @@ import fastifyCors from '@fastify/cors';
 import fastifyRateLimit from '@fastify/rate-limit';
 import { Redis } from 'ioredis';
 import jwtPlugin from './plugins/jwt.js';
+import { formatSchemaErrors } from './utils/schema-error-formatter.js';
 import { requireAuth } from './middleware/auth.js';
 import authRoutes from './routes/v1/auth.js';
 import orgRoutes from './routes/v1/orgs.js';
@@ -37,6 +38,25 @@ export async function buildApp() {
 
   const redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379');
   app.decorate('redis', redis);
+
+  // Both must be registered before any route plugins — Fastify resolves each route's
+  // error/schema handling from its own encapsulated context at register() time, so
+  // anything set after routes are registered never applies to them.
+  app.setSchemaErrorFormatter(formatSchemaErrors);
+
+  app.setErrorHandler<FastifyError>(async (error, request, reply) => {
+    const status = error.statusCode ?? 500;
+    if (status >= 500) {
+      request.log.error(error);
+    }
+    return reply.code(status).send({
+      type: 'https://pulseboard.dev/errors/internal',
+      title: status === 500 ? 'Internal Server Error' : error.message,
+      status,
+      detail: status === 500 ? 'An unexpected error occurred' : error.message,
+      requestId: request.id,
+    });
+  });
 
   await app.register(fastifyCookie);
 
@@ -77,21 +97,6 @@ export async function buildApp() {
   });
 
   app.get('/health', async () => ({ ok: true }));
-
-  // Normalise service-layer errors (statusCode property) into RFC 9457 Problem Details
-  app.setErrorHandler<FastifyError>(async (error, request, reply) => {
-    const status = error.statusCode ?? 500;
-    if (status >= 500) {
-      request.log.error(error);
-    }
-    return reply.code(status).send({
-      type: 'https://pulseboard.dev/errors/internal',
-      title: status === 500 ? 'Internal Server Error' : error.message,
-      status,
-      detail: status === 500 ? 'An unexpected error occurred' : error.message,
-      requestId: request.id,
-    });
-  });
 
   app.addHook('onClose', async () => {
     redis.disconnect();

@@ -6,6 +6,8 @@ import { LoginPage } from './features/auth/LoginPage.js';
 import { RegisterPage } from './features/auth/RegisterPage.js';
 import { DashboardPage } from './features/dashboard/DashboardPage.js';
 import { ProjectPage } from './features/project/ProjectPage.js';
+import { NewProjectPage } from './features/project/NewProjectPage.js';
+import { IntegrationsPage } from './features/project/IntegrationsPage.js';
 import { Spinner } from './components/Spinner.js';
 
 const queryClient = new QueryClient({
@@ -63,7 +65,9 @@ function AppRoutes() {
       <Route path="/register" element={<GuestOnly><RegisterPage /></GuestOnly>} />
 
       <Route path="/dashboard" element={<RequireAuth><DashboardPage /></RequireAuth>} />
+      <Route path="/projects/new" element={<RequireAuth><NewProjectPage /></RequireAuth>} />
       <Route path="/projects/:projectId" element={<RequireAuth><ProjectPage /></RequireAuth>} />
+      <Route path="/projects/:projectId/integrations" element={<RequireAuth><IntegrationsPage /></RequireAuth>} />
 
       {/* Catch-all: redirect unknown paths to dashboard (which will itself redirect to login if not authenticated) */}
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
