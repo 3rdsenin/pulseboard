@@ -4,12 +4,11 @@ import fastifyJwt from '@fastify/jwt';
 
 // @fastify/jwt namespace decorators don't self-augment types when using custom
 // jwtSign/jwtVerify option names — declare them explicitly so TypeScript resolves them.
+// Per @fastify/jwt: the sign side decorates `reply`, the verify side decorates `request`.
 declare module 'fastify' {
-  interface FastifyInstance {
+  interface FastifyReply {
     accessSign(payload: object, options?: object): Promise<string>;
-    accessVerify<T = object>(request: FastifyRequest, options?: object): Promise<T>;
     refreshSign(payload: object, options?: object): Promise<string>;
-    refreshVerify<T = object>(request: FastifyRequest, options?: object): Promise<T>;
   }
   interface FastifyRequest {
     accessVerify<T = object>(options?: object): Promise<T>;

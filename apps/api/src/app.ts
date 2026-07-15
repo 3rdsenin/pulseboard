@@ -26,6 +26,13 @@ export async function buildApp() {
     logger: {
       level: process.env.LOG_LEVEL ?? 'info',
     },
+    // ratings' value field is number | string (NUMERIC or ENUM segment scale) — Ajv's
+    // strict mode rejects JSON Schema "type" arrays unless this is explicitly allowed.
+    ajv: {
+      customOptions: {
+        allowUnionTypes: true,
+      },
+    },
   });
 
   const redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379');

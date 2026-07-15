@@ -2,6 +2,7 @@ import { Worker, type Job } from 'bullmq';
 import { v4 as uuidv4 } from 'uuid';
 import db from '../db/index.js';
 import { workerConnection } from './queues.js';
+import { ScoringService } from '../services/scoring.service.js';
 
 export interface ComputeMetricsJobData {
   projectId: string;
@@ -10,12 +11,7 @@ export interface ComputeMetricsJobData {
   syncJobId: string;
 }
 
-// Weighted scoring formula from AOMS reference implementation (50/30/20):
-//   delivery_score      = (issues_done / issues_total) * 100        — weight 50%
-//   high_priority_score = (issues_high_priority / issues_total) * 100 — weight 20%
-//   volume_score        = issues_done (normalised against team max)  — weight 30%
-//
-// weighted_score = (delivery * 0.5) + (volume * 0.3) + (high_priority * 0.2)
+const scoringService = new ScoringService();
 
 async function computeMetrics(job: Job<ComputeMetricsJobData>) {
   const { projectId, organizationId, sprintId, syncJobId } = job.data;
@@ -34,8 +30,6 @@ async function computeMetrics(job: Job<ComputeMetricsJobData>) {
     if (!sprint) throw new Error('Sprint not found');
 
     // Collect per-contributor issue counts from issue_snapshots for this sprint period
-    let maxIssuesDone = 1; // avoid division-by-zero in volume normalisation
-
     const rows: Array<{
       contributorId: string;
       issuesTotal: number;
@@ -59,20 +53,9 @@ async function computeMetrics(job: Job<ComputeMetricsJobData>) {
       const issuesInProgress = Number(counts?.in_progress ?? 0);
 
       rows.push({ contributorId, issuesTotal, issuesDone, issuesHighPriority, issuesInProgress });
-      if (issuesDone > maxIssuesDone) maxIssuesDone = issuesDone;
     }
 
-    // Compute scores in a second pass so volume normalisation uses the team maximum
-    let rank = 1;
-    const scored = rows
-      .map((r) => {
-        const deliveryScore = r.issuesTotal > 0 ? (r.issuesDone / r.issuesTotal) * 100 : 0;
-        const volumeScore = (r.issuesDone / maxIssuesDone) * 100;
-        const highPriorityScore = r.issuesTotal > 0 ? (r.issuesHighPriority / r.issuesTotal) * 100 : 0;
-        const weightedScore = deliveryScore * 0.5 + volumeScore * 0.3 + highPriorityScore * 0.2;
-        return { ...r, deliveryScore, volumeScore, highPriorityScore, weightedScore };
-      })
-      .sort((a, b) => b.weightedScore - a.weightedScore);
+    const scored = scoringService.computeScores(rows);
 
     for (const s of scored) {
       await db('contributor_sprint_metrics')
@@ -90,7 +73,7 @@ async function computeMetrics(job: Job<ComputeMetricsJobData>) {
           volume_score: s.volumeScore.toFixed(2),
           high_priority_score: s.highPriorityScore.toFixed(2),
           weighted_score: s.weightedScore.toFixed(2),
-          sprint_rank: rank++,
+          sprint_rank: s.sprintRank,
           computed_at: db.fn.now(),
         })
         .onConflict(['project_id', 'contributor_id', 'sprint_id'])

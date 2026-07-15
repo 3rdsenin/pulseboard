@@ -24,14 +24,14 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
 
     const jti = await authService.createRefreshJti(userId);
 
-    const accessToken = await app.accessSign({
+    const accessToken = await reply.accessSign({
       sub: userId,
       email: userData.email,
       organizationId: orgId,
       orgRole: userData.orgRole,
     }, { expiresIn: ACCESS_EXPIRY });
 
-    const refreshToken = await app.refreshSign(
+    const refreshToken = await reply.refreshSign(
       { sub: userId, jti },
       { expiresIn: REFRESH_EXPIRY }
     );
@@ -55,14 +55,14 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
     const userData = await authService.login(input);
     const jti = await authService.createRefreshJti(userData.userId);
 
-    const accessToken = await app.accessSign({
+    const accessToken = await reply.accessSign({
       sub: userData.userId,
       email: userData.email,
       organizationId: userData.organizationId,
       orgRole: userData.orgRole,
     }, { expiresIn: ACCESS_EXPIRY });
 
-    const refreshToken = await app.refreshSign(
+    const refreshToken = await reply.refreshSign(
       { sub: userData.userId, jti },
       { expiresIn: REFRESH_EXPIRY }
     );
@@ -113,14 +113,14 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
 
     const newJti = await authService.rotateRefreshJti(payload.sub, payload.jti);
 
-    const accessToken = await app.accessSign({
+    const accessToken = await reply.accessSign({
       sub: userData.userId,
       email: userData.email,
       organizationId: userData.organizationId,
       orgRole: userData.orgRole,
     }, { expiresIn: ACCESS_EXPIRY });
 
-    const refreshToken = await app.refreshSign(
+    const refreshToken = await reply.refreshSign(
       { sub: userData.userId, jti: newJti },
       { expiresIn: REFRESH_EXPIRY }
     );

@@ -18,11 +18,11 @@
     "db:seed": "knex seed:run --knexfile src/db/knexfile.ts"
   },
   "dependencies": {
-    "@fastify/cookie": "^9.4.0",
-    "@fastify/cors": "^9.0.0",
-    "@fastify/jwt": "^8.0.0",
-    "@fastify/oauth2": "^7.7.0",
-    "@fastify/rate-limit": "^9.1.0",
+    "@fastify/cookie": "^10.0.1",
+    "@fastify/cors": "^10.1.0",
+    "@fastify/jwt": "^9.1.0",
+    "@fastify/oauth2": "^8.2.0",
+    "@fastify/rate-limit": "^10.3.0",
     "@pulseboard/shared": "workspace:*",
     "bcryptjs": "^2.4.3",
     "bullmq": "^5.13.0",
