@@ -6,6 +6,13 @@ import type {
   RawCommit,
 } from './integration.adapter.js';
 
+export class GitHubApiError extends Error {
+  constructor(message: string, public readonly status: number) {
+    super(message);
+    this.name = 'GitHubApiError';
+  }
+}
+
 // GitHub REST API v3 (api.github.com). Supports PAT (personal access token) auth.
 export class GitHubAdapter implements IntegrationAdapter {
   readonly type = 'GITHUB' as const;
@@ -31,7 +38,10 @@ export class GitHubAdapter implements IntegrationAdapter {
           for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
         }
         const res = await fetch(url.toString(), { headers: baseHeaders });
-        if (!res.ok) throw new Error(`GitHub ${res.status}: ${await res.text()}`);
+        if (!res.ok) {
+          const error = new GitHubApiError(`GitHub ${res.status}: ${await res.text()}`, res.status);
+          throw error;
+        }
         return res.json() as Promise<T>;
       },
     };
@@ -78,9 +88,16 @@ export class GitHubAdapter implements IntegrationAdapter {
         const params: Record<string, string | number> = { per_page: perPage, page };
         if (since) params.since = since.toISOString();
 
-        const batch = await client
+        // A single renamed/deleted repo (404) shouldn't abort the whole sync — but
+        // auth failures, rate limits, and other errors affect every repo and must
+        // propagate so the sync job fails and the integration is marked ERROR,
+        // instead of silently reporting success with zero commits.
+        const batch: GitHubCommit[] = await client
           .get<GitHubCommit[]>(`repos/${owner}/${repoName}/commits`, params)
-          .catch(() => [] as GitHubCommit[]);
+          .catch((error: unknown) => {
+            if (error instanceof GitHubApiError && error.status === 404) return [];
+            throw error;
+          });
 
         for (const c of batch) {
           commits.push({
