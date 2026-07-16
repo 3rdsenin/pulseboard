@@ -4,6 +4,7 @@ import type {
   ConnectionResult,
   RawIssue,
   RawCommit,
+  RawSprint,
 } from './integration.adapter.js';
 
 export class GitHubApiError extends Error {
@@ -62,6 +63,15 @@ export class GitHubAdapter implements IntegrationAdapter {
 
   // GitHub issues are tracked in Jira for this project — fetchIssues is a no-op
   async fetchIssues(): Promise<RawIssue[]> {
+    return [];
+  }
+
+  // GitHub has no sprint concept — sprint data comes from Jira's Agile API only
+  async fetchSprints(): Promise<RawSprint[]> {
+    return [];
+  }
+
+  async fetchSprintIssueKeys(): Promise<string[]> {
     return [];
   }
 

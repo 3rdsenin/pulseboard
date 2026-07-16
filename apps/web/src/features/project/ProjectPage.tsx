@@ -7,15 +7,20 @@ import { syncApi } from '../../api/sync.js';
 import { extractApiError } from '../../api/client.js';
 import { useAuth } from '../../hooks/useAuth.js';
 import { SprintView } from './SprintView.js';
+import { ProjectOverview } from './ProjectOverview.js';
 import { Button } from '../../components/Button.js';
 import { Spinner } from '../../components/Spinner.js';
+
+const OVERVIEW = 'overview' as const;
 
 export function ProjectPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const { user, logout } = useAuth();
   const queryClient = useQueryClient();
   const isAdmin = user?.orgRole === 'ORG_ADMIN';
-  const [selectedSprintId, setSelectedSprintId] = useState<string | null>(null);
+  // null = not yet chosen — defaults to the active/most recent sprint if one exists,
+  // otherwise the always-available All Issues overview (see displayView below).
+  const [selectedView, setSelectedView] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
 
   const triggerSync = useMutation({
@@ -49,9 +54,10 @@ export function ProjectPage() {
     },
   });
 
-  // Auto-select the first sprint (active or most recent) when sprints load
+  // Auto-select the active/most recent sprint when sprints exist; otherwise default to
+  // the All Issues overview — a project is never blocked from showing data by sprint state.
   const activeSprint = sprints?.[0];
-  const displaySprintId = selectedSprintId ?? activeSprint?.id ?? null;
+  const displayView = selectedView ?? activeSprint?.id ?? OVERVIEW;
 
   if (loadingProject) {
     return (
@@ -90,50 +96,34 @@ export function ProjectPage() {
       </header>
 
       <main className="mx-auto max-w-7xl px-6 py-8">
-        {/* Sprint tabs */}
-        {loadingSprints && (
-          <div className="mb-6 flex gap-2">
-            {[1, 2, 3].map((i) => (
+        {/* View tabs — All Issues is always available; per-sprint tabs are an additive
+            lens on top, shown only once sprint data exists. A project with zero sprints
+            (e.g. a Kanban board) is fully viewable via All Issues alone. */}
+        <div className="mb-6 flex flex-wrap gap-2 border-b border-gray-200 pb-0">
+          <button
+            onClick={() => setSelectedView(OVERVIEW)}
+            className={[
+              'rounded-t-md border border-b-0 px-4 py-2 text-sm font-medium transition-colors',
+              displayView === OVERVIEW
+                ? 'border-gray-200 bg-white text-brand-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700',
+            ].join(' ')}
+          >
+            All Issues
+          </button>
+
+          {loadingSprints &&
+            [1, 2].map((i) => (
               <div key={i} className="h-9 w-28 animate-pulse rounded-md bg-gray-200" />
             ))}
-          </div>
-        )}
 
-        {!loadingSprints && (sprints?.length ?? 0) === 0 && (
-          <div className="mb-6 rounded-lg border border-dashed border-gray-300 bg-gray-50 py-10 text-center">
-            <p className="text-sm text-gray-500">
-              No sprints found yet.{' '}
-              {isAdmin ? (
-                <>
-                  Make sure a Jira or GitHub integration is{' '}
-                  <Link to={`/projects/${projectId}/integrations`} className="font-medium text-brand-600 hover:underline">
-                    connected
-                  </Link>
-                  , then trigger a sync.
-                </>
-              ) : (
-                'An admin needs to connect an integration and run a sync.'
-              )}
-            </p>
-            {isAdmin && (
-              <div className="mt-4">
-                <Button size="sm" loading={triggerSync.isPending} onClick={() => triggerSync.mutate()}>
-                  Sync now
-                </Button>
-                {syncError && <p className="mt-2 text-sm text-red-600">{syncError}</p>}
-              </div>
-            )}
-          </div>
-        )}
-
-        {!loadingSprints && (sprints?.length ?? 0) > 0 && (
-          <div className="mb-6 flex flex-wrap gap-2 border-b border-gray-200 pb-0">
-            {sprints!.map((sprint) => {
-              const isSelected = (selectedSprintId ?? activeSprint?.id) === sprint.id;
+          {!loadingSprints &&
+            sprints?.map((sprint) => {
+              const isSelected = displayView === sprint.id;
               return (
                 <button
                   key={sprint.id}
-                  onClick={() => setSelectedSprintId(sprint.id)}
+                  onClick={() => setSelectedView(sprint.id)}
                   className={[
                     'rounded-t-md border border-b-0 px-4 py-2 text-sm font-medium transition-colors',
                     isSelected
@@ -148,15 +138,41 @@ export function ProjectPage() {
                 </button>
               );
             })}
-          </div>
+        </div>
+
+        {!loadingSprints && (sprints?.length ?? 0) === 0 && (
+          <p className="mb-6 text-sm text-gray-500">
+            No sprints found.{' '}
+            {isAdmin ? (
+              <>
+                Connect a Jira or GitHub integration{' '}
+                <Link to={`/projects/${projectId}/integrations`} className="font-medium text-brand-600 hover:underline">
+                  here
+                </Link>
+                {' '}if you haven&apos;t, or{' '}
+                <button
+                  onClick={() => triggerSync.mutate()}
+                  disabled={!isAdmin}
+                  className="font-medium text-brand-600 hover:underline disabled:cursor-not-allowed disabled:text-gray-400"
+                >
+                  sync now
+                </button>
+                . Boards without sprints (e.g. Kanban) will never show any — that&apos;s expected, use All Issues below.
+              </>
+            ) : (
+              'An admin needs to connect an integration and run a sync.'
+            )}
+            {syncError && <span className="mt-1 block text-red-600">{syncError}</span>}
+          </p>
         )}
 
-        {/* Sprint content */}
-        {displaySprintId && projectId && (
+        {/* View content */}
+        {projectId && displayView === OVERVIEW && <ProjectOverview projectId={projectId} />}
+        {projectId && displayView !== OVERVIEW && (
           <SprintView
             projectId={projectId}
-            sprintId={displaySprintId}
-            sprintName={sprints?.find((s) => s.id === displaySprintId)?.name ?? ''}
+            sprintId={displayView}
+            sprintName={sprints?.find((s) => s.id === displayView)?.name ?? ''}
           />
         )}
       </main>

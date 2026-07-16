@@ -30,6 +30,11 @@ export interface ContributorMetrics {
 }
 
 export const dashboardApi = {
+  // Contributor stats across ALL synced issues, independent of sprints — always available,
+  // even for projects with zero sprints (e.g. a Kanban board with no sprint concept).
+  getProjectOverview: (projectId: string) =>
+    api.get(`projects/${projectId}/overview`).json<ContributorMetrics[]>(),
+
   listSprints: (projectId: string) =>
     api.get(`projects/${projectId}/sprints`).json<Sprint[]>(),
 

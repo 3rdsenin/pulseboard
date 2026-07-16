@@ -8,6 +8,16 @@ export default async function dashboardRoutes(app: FastifyInstance): Promise<voi
 
   app.addHook('preHandler', requireAuth);
 
+  // GET /projects/:projectId/overview — contributor stats across ALL synced issues,
+  // independent of sprints. Always available, even for projects with zero sprints
+  // (e.g. a Kanban board with no sprint concept at all).
+  app.get('/:projectId/overview', {
+    preHandler: [requireProjectRole('PROJECT_VIEWER')],
+  }, async (request) => {
+    const { projectId } = request.params as { projectId: string };
+    return dashboardService.getProjectOverview(request.context.organizationId, projectId);
+  });
+
   // GET /projects/:projectId/sprints — ordered newest first; used to populate sprint tabs
   app.get('/:projectId/sprints', {
     preHandler: [requireProjectRole('PROJECT_VIEWER')],

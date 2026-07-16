@@ -41,10 +41,12 @@ async function computeMetrics(job: Job<ComputeMetricsJobData>) {
     for (const { id: contributorId } of contributors) {
       const counts = await db('issue_snapshots')
         .where({ project_id: projectId, assignee_contributor_id: contributorId, sprint_id: sprintId })
-        .count('id as total')
-        .sum(db.raw(`CASE WHEN status ILIKE '%done%' OR status ILIKE '%closed%' THEN 1 ELSE 0 END as done`))
-        .sum(db.raw(`CASE WHEN priority IN ('High', 'Highest', 'Critical') THEN 1 ELSE 0 END as high_priority`))
-        .sum(db.raw(`CASE WHEN status ILIKE '%in progress%' THEN 1 ELSE 0 END as in_progress`))
+        .select(
+          db.raw('COUNT(*) as total'),
+          db.raw(`SUM(CASE WHEN status ILIKE '%done%' OR status ILIKE '%closed%' THEN 1 ELSE 0 END) as done`),
+          db.raw(`SUM(CASE WHEN priority IN ('High', 'Highest', 'Critical') THEN 1 ELSE 0 END) as high_priority`),
+          db.raw(`SUM(CASE WHEN status ILIKE '%in progress%' THEN 1 ELSE 0 END) as in_progress`)
+        )
         .first();
 
       const issuesTotal = Number(counts?.total ?? 0);

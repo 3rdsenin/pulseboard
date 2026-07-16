@@ -1,6 +1,74 @@
 import db from '../db/index.js';
+import { ScoringService } from './scoring.service.js';
+
+const scoringService = new ScoringService();
 
 export class DashboardService {
+  // Project-wide contributor stats across ALL synced issues, independent of sprints.
+  // Sprints are an additive lens (per-sprint breakdown, trends) — a project must still be
+  // fully viewable with zero sprints (e.g. a Kanban board with no sprint concept at all).
+  async getProjectOverview(organizationId: string, projectId: string) {
+    const contributors = await db('contributors')
+      .where({ organization_id: organizationId, project_id: projectId, is_active: true, deleted_at: null })
+      .select('id', 'display_name', 'role_label', 'github_username');
+
+    const rows: Array<{
+      contributorId: string;
+      issuesTotal: number;
+      issuesDone: number;
+      issuesHighPriority: number;
+      issuesInProgress: number;
+    }> = [];
+
+    for (const c of contributors) {
+      const counts = await db('issue_snapshots')
+        .where({ project_id: projectId, assignee_contributor_id: c.id })
+        .select(
+          db.raw('COUNT(*) as total'),
+          db.raw(`SUM(CASE WHEN status ILIKE '%done%' OR status ILIKE '%closed%' THEN 1 ELSE 0 END) as done`),
+          db.raw(`SUM(CASE WHEN priority IN ('High', 'Highest', 'Critical') THEN 1 ELSE 0 END) as high_priority`),
+          db.raw(`SUM(CASE WHEN status ILIKE '%in progress%' THEN 1 ELSE 0 END) as in_progress`)
+        )
+        .first();
+
+      rows.push({
+        contributorId: c.id,
+        issuesTotal: Number(counts?.total ?? 0),
+        issuesDone: Number(counts?.done ?? 0),
+        issuesHighPriority: Number(counts?.high_priority ?? 0),
+        issuesInProgress: Number(counts?.in_progress ?? 0),
+      });
+    }
+
+    const scored = scoringService.computeScores(rows);
+    const byId = new Map(contributors.map((c) => [c.id, c]));
+
+    // commitCount/reposContributed aren't tracked outside sprint scope yet — GitHub sync
+    // only ever increments an existing contributor_sprint_metrics row for the active sprint,
+    // so there's no raw commit data to aggregate here. Known gap, not fixed in this pass.
+    return scored.map((s) => {
+      const c = byId.get(s.contributorId)!;
+      return {
+        contributorId: s.contributorId,
+        displayName: c.display_name,
+        roleLabel: c.role_label,
+        githubUsername: c.github_username,
+        weightedScore: s.weightedScore,
+        deliveryScore: s.deliveryScore,
+        volumeScore: s.volumeScore,
+        highPriorityScore: s.highPriorityScore,
+        issuesTotal: s.issuesTotal,
+        issuesDone: s.issuesDone,
+        issuesHighPriority: s.issuesHighPriority,
+        issuesInProgress: s.issuesInProgress,
+        commitCount: 0,
+        reposContributed: [] as string[],
+        sprintRank: s.sprintRank,
+        computedAt: null as string | null,
+      };
+    });
+  }
+
   async listSprints(organizationId: string, projectId: string) {
     return db('sprints')
       .where({ organization_id: organizationId, project_id: projectId })

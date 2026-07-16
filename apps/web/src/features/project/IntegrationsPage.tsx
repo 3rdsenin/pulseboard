@@ -29,6 +29,7 @@ export function IntegrationsPage() {
   const [type, setType] = useState<IntegrationType>('JIRA');
   const [baseUrl, setBaseUrl] = useState('');
   const [projectKey, setProjectKey] = useState('');
+  const [boardId, setBoardId] = useState('');
   const [email, setEmail] = useState('');
   const [apiToken, setApiToken] = useState('');
   const [repos, setRepos] = useState('');
@@ -37,11 +38,21 @@ export function IntegrationsPage() {
   const [testResult, setTestResult] = useState<ConnectionResult | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
+  // Board links look like .../boards/323 — auto-fill Board ID from a pasted link so
+  // sprint sync works without the user needing to know it's a separate field.
+  function handleBaseUrlChange(value: string) {
+    setBaseUrl(value);
+    if (!boardId) {
+      const match = value.match(/\/boards\/(\d+)/);
+      if (match) setBoardId(match[1]);
+    }
+  }
+
   function buildPayload(): { type: IntegrationType; config: Record<string, unknown>; credentials: Record<string, string> } {
     if (type === 'JIRA') {
       return {
         type: 'JIRA',
-        config: { baseUrl, projectKey },
+        config: { baseUrl, projectKey, boardId: boardId || undefined },
         credentials: { email, apiToken },
       };
     }
@@ -55,6 +66,7 @@ export function IntegrationsPage() {
   function resetForm() {
     setBaseUrl('');
     setProjectKey('');
+    setBoardId('');
     setEmail('');
     setApiToken('');
     setRepos('');
@@ -158,15 +170,21 @@ export function IntegrationsPage() {
                 <>
                   <Input
                     label="Base URL"
-                    hint="Your Jira Cloud site, e.g. https://your-team.atlassian.net"
+                    hint="Your Jira Cloud site or a board/project link — either works, e.g. https://your-team.atlassian.net"
                     value={baseUrl}
-                    onChange={(e) => setBaseUrl(e.target.value)}
+                    onChange={(e) => handleBaseUrlChange(e.target.value)}
                   />
                   <Input
                     label="Project key"
                     hint="The short code shown in Jira issue IDs, e.g. PROJ"
                     value={projectKey}
                     onChange={(e) => setProjectKey(e.target.value)}
+                  />
+                  <Input
+                    label="Board ID"
+                    hint="Needed for sprint data — auto-filled if your Base URL is a board link, or find it in the board's URL (.../boards/123)"
+                    value={boardId}
+                    onChange={(e) => setBoardId(e.target.value)}
                   />
                   <Input
                     label="Email"
