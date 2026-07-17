@@ -20,13 +20,13 @@ describe('JiraAdapter.testConnection', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const result = await adapter.testConnection(
-      { type: 'JIRA', baseUrl: 'https://amali-tech.atlassian.net/jira/software/projects/CTD/boards/323' },
+      { type: 'JIRA', baseUrl: 'https://your-team.atlassian.net/jira/software/projects/PROJ/boards/323' },
       credentials
     );
 
     expect(result.ok).toBe(true);
     const calledUrl = fetchMock.mock.calls[0][0] as string;
-    expect(calledUrl).toBe('https://amali-tech.atlassian.net/rest/api/3/myself');
+    expect(calledUrl).toBe('https://your-team.atlassian.net/rest/api/3/myself');
   });
 
   it('returns a clear error instead of a raw JSON-parse failure when Jira responds with HTML', async () => {
@@ -39,7 +39,7 @@ describe('JiraAdapter.testConnection', () => {
     ));
 
     const result = await adapter.testConnection(
-      { type: 'JIRA', baseUrl: 'https://amali-tech.atlassian.net/jira/software/projects/CTD/boards/323' },
+      { type: 'JIRA', baseUrl: 'https://your-team.atlassian.net/jira/software/projects/PROJ/boards/323' },
       credentials
     );
 
@@ -75,7 +75,7 @@ function mockIssue(key: string) {
 describe('JiraAdapter.fetchIssues', () => {
   const adapter = new JiraAdapter();
   const credentials = { email: 'user@example.com', apiToken: 'token123' };
-  const config = { type: 'JIRA' as const, baseUrl: 'https://amali-tech.atlassian.net', projectKey: 'CTD' };
+  const config = { type: 'JIRA' as const, baseUrl: 'https://your-team.atlassian.net', projectKey: 'PROJ' };
 
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -106,19 +106,19 @@ describe('JiraAdapter.fetchIssues', () => {
         return {
           ok: true,
           headers: new Headers({ 'content-type': 'application/json' }),
-          json: async () => ({ issues: [mockIssue('CTD-1')], nextPageToken: 'page-2-token', isLast: false }),
+          json: async () => ({ issues: [mockIssue('PROJ-1')], nextPageToken: 'page-2-token', isLast: false }),
         } as unknown as Response;
       }
       return {
         ok: true,
         headers: new Headers({ 'content-type': 'application/json' }),
-        json: async () => ({ issues: [mockIssue('CTD-2')], isLast: true }),
+        json: async () => ({ issues: [mockIssue('PROJ-2')], isLast: true }),
       } as unknown as Response;
     }));
 
     const issues = await adapter.fetchIssues(config, credentials);
 
-    expect(issues.map((i) => i.externalKey)).toEqual(['CTD-1', 'CTD-2']);
+    expect(issues.map((i) => i.externalKey)).toEqual(['PROJ-1', 'PROJ-2']);
   });
 });
 
@@ -139,7 +139,7 @@ describe('JiraAdapter.fetchSprints', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const sprints = await adapter.fetchSprints(
-      { type: 'JIRA', baseUrl: 'https://amali-tech.atlassian.net', projectKey: 'CTD' },
+      { type: 'JIRA', baseUrl: 'https://your-team.atlassian.net', projectKey: 'PROJ' },
       credentials
     );
 
@@ -158,7 +158,7 @@ describe('JiraAdapter.fetchSprints', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const sprints = await adapter.fetchSprints(
-      { type: 'JIRA', baseUrl: 'https://amali-tech.atlassian.net', boardId: '323' },
+      { type: 'JIRA', baseUrl: 'https://your-team.atlassian.net', boardId: '323' },
       credentials
     );
 
@@ -187,7 +187,7 @@ describe('JiraAdapter.fetchSprints', () => {
     }));
 
     const sprints = await adapter.fetchSprints(
-      { type: 'JIRA', baseUrl: 'https://amali-tech.atlassian.net', boardId: '323' },
+      { type: 'JIRA', baseUrl: 'https://your-team.atlassian.net', boardId: '323' },
       credentials
     );
 
@@ -211,22 +211,22 @@ describe('JiraAdapter.fetchSprintIssueKeys', () => {
         return {
           ok: true,
           headers: new Headers({ 'content-type': 'application/json' }),
-          json: async () => ({ issues: [{ key: 'CTD-1' }], total: 2 }),
+          json: async () => ({ issues: [{ key: 'PROJ-1' }], total: 2 }),
         } as unknown as Response;
       }
       return {
         ok: true,
         headers: new Headers({ 'content-type': 'application/json' }),
-        json: async () => ({ issues: [{ key: 'CTD-2' }], total: 2 }),
+        json: async () => ({ issues: [{ key: 'PROJ-2' }], total: 2 }),
       } as unknown as Response;
     }));
 
     const keys = await adapter.fetchSprintIssueKeys(
-      { type: 'JIRA', baseUrl: 'https://amali-tech.atlassian.net' },
+      { type: 'JIRA', baseUrl: 'https://your-team.atlassian.net' },
       credentials,
       '1'
     );
 
-    expect(keys).toEqual(['CTD-1', 'CTD-2']);
+    expect(keys).toEqual(['PROJ-1', 'PROJ-2']);
   });
 });
