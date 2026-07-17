@@ -7,12 +7,15 @@
 
 ## 1. Start infrastructure
 
+Run this from this folder (`pulseboard/`):
+
 ```bash
-cd dashboard_product/pulseboard
 docker compose -f docker-compose.dev.yml up -d
 ```
 
 Waits for healthchecks on both postgres and redis before returning.
+
+**Note:** Docker Compose names containers after this folder (`pulseboard`) by default. If containers with that project name are already running — even from a different session or a previous location of this repo — this attaches to them instead of failing or creating a second, empty database. See `CLAUDE.md`'s "Local Development" section for why this matters.
 
 ## 2. Install dependencies
 
