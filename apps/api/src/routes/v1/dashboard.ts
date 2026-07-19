@@ -55,4 +55,50 @@ export default async function dashboardRoutes(app: FastifyInstance): Promise<voi
       sprintId
     );
   });
+
+  // GET /projects/:projectId/issues
+  // Paginated, filterable issue list
+  app.get('/:projectId/issues', {
+    preHandler: [requireProjectRole('PROJECT_VIEWER')],
+  }, async (request) => {
+    const { projectId } = request.params as { projectId: string };
+    const { status, type, priority, assigneeId, sprintId, q, page, perPage } = request.query as {
+      status?: string;
+      type?: string;
+      priority?: string;
+      assigneeId?: string;
+      sprintId?: string;
+      q?: string;
+      page?: string;
+      perPage?: string;
+    };
+
+    return dashboardService.getProjectIssues(
+      request.context.organizationId,
+      projectId,
+      {
+        status,
+        type,
+        priority,
+        assigneeId,
+        sprintId,
+        q,
+        page: page ? parseInt(page, 10) : undefined,
+        perPage: perPage ? parseInt(perPage, 10) : undefined,
+      }
+    );
+  });
+
+  // GET /projects/:projectId/features/breakdown
+  app.get('/:projectId/features/breakdown', {
+    preHandler: [requireProjectRole('PROJECT_VIEWER')],
+  }, async (request) => {
+    const { projectId } = request.params as { projectId: string };
+    const { sprintId } = request.query as { sprintId?: string };
+    return dashboardService.getFeatureBreakdown(
+      request.context.organizationId,
+      projectId,
+      sprintId
+    );
+  });
 }

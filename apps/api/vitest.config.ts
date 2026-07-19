@@ -3,6 +3,11 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     environment: 'node',
+    // All integration tests share one real Postgres database (no mocks — see
+    // feedback_verification_first) and each file's beforeEach truncates organizations/users.
+    // Running test files in parallel lets one file's cleanup wipe another file's
+    // in-progress fixtures mid-test. Serial execution trades some speed for determinism.
+    fileParallelism: false,
     env: {
       NODE_ENV: 'test',
       DATABASE_URL: 'postgres://pulseboard:changeme@localhost:5432/pulseboard_test',

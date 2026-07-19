@@ -2,7 +2,9 @@ import type { FastifyInstance } from 'fastify';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { AuthService } from '../../services/auth.service.js';
 import { requireAuth } from '../../middleware/auth.js';
-import { RegisterSchema, LoginSchema } from '@pulseboard/shared';
+import { RegisterSchema, LoginSchema, SwitchOrgSchema } from '@pulseboard/shared';
+import { z } from 'zod';
+import db from '../../db/index.js';
 import type { RefreshTokenPayload } from '../../types/index.js';
 
 const ACCESS_EXPIRY = process.env.JWT_ACCESS_EXPIRY ?? '15m';
@@ -146,6 +148,77 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
     reply
       .clearCookie('pb_refresh', { path: '/api/v1/auth' })
       .send({ ok: true });
+  });
+
+  // GET /auth/organizations — every org the caller belongs to, for the org switcher.
+  app.get('/organizations', { preHandler: [requireAuth] }, async (request) => {
+    return authService.listOrganizations(request.context.userId);
+  });
+
+  // POST /auth/switch-org — reissue a token scoped to a different membership.
+  // See listOrganizations()/switchOrganization() on AuthService for why this exists.
+  app.post('/switch-org', {
+    schema: { body: zodToJsonSchema(SwitchOrgSchema) },
+    preHandler: [requireAuth],
+  }, async (request, reply) => {
+    const { organizationId } = SwitchOrgSchema.parse(request.body);
+    const userData = await authService.switchOrganization(request.context.userId, organizationId);
+    const jti = await authService.createRefreshJti(userData.userId);
+
+    const accessToken = await reply.accessSign({
+      sub: userData.userId,
+      email: userData.email,
+      organizationId: userData.organizationId,
+      orgRole: userData.orgRole,
+    }, { expiresIn: ACCESS_EXPIRY });
+
+    const refreshToken = await reply.refreshSign(
+      { sub: userData.userId, jti },
+      { expiresIn: REFRESH_EXPIRY }
+    );
+
+    reply
+      .setCookie('pb_refresh', refreshToken, {
+        httpOnly: true,
+        sameSite: 'strict',
+        secure: process.env.NODE_ENV === 'production',
+        path: '/api/v1/auth',
+        maxAge: REFRESH_TTL_SECONDS,
+      })
+      .send({ accessToken, organizationId: userData.organizationId, orgRole: userData.orgRole });
+  });
+
+  app.get('/me', { preHandler: [requireAuth] }, async (request) => {
+    const user = await db('users')
+      .where({ id: request.context.userId })
+      .select('id', 'name', 'email', 'github_username as githubUsername')
+      .first();
+    return user;
+  });
+
+  const UpdateMeSchema = z.object({
+    name: z.string().min(1).max(255).optional(),
+    githubUsername: z.string().max(255).nullable().optional(),
+  });
+
+  app.patch('/me', {
+    schema: { body: zodToJsonSchema(UpdateMeSchema) },
+    preHandler: [requireAuth],
+  }, async (request) => {
+    const input = UpdateMeSchema.parse(request.body);
+    const updates: Record<string, string | null> = {};
+    if (input.name !== undefined) updates.name = input.name;
+    if (input.githubUsername !== undefined) updates.github_username = input.githubUsername;
+
+    await db('users')
+      .where({ id: request.context.userId })
+      .update(updates);
+
+    const user = await db('users')
+      .where({ id: request.context.userId })
+      .select('id', 'name', 'email', 'github_username as githubUsername')
+      .first();
+    return user;
   });
 }
 

@@ -30,7 +30,11 @@ export class SegmentService {
 
     return query
       .orderBy('display_order', 'asc')
-      .select('id', 'name', 'description', 'scale_type', 'scale_max', 'enum_values', 'display_order', 'is_archived', 'created_at');
+      .select(
+        'id', 'name', 'description',
+        'scale_type as scaleType', 'scale_max as scaleMax', 'enum_values as enumValues',
+        'display_order as displayOrder', 'is_archived as isArchived', 'created_at as createdAt'
+      );
   }
 
   async createSegment(
@@ -52,7 +56,11 @@ export class SegmentService {
         display_order: input.displayOrder ?? 0,
         created_by: actorId,
       })
-      .returning(['id', 'name', 'description', 'scale_type', 'scale_max', 'enum_values', 'display_order', 'created_at']);
+      .returning([
+        'id', 'name', 'description',
+        'scale_type as scaleType', 'scale_max as scaleMax', 'enum_values as enumValues',
+        'display_order as displayOrder', 'created_at as createdAt',
+      ]);
 
     return segment;
   }
@@ -74,7 +82,11 @@ export class SegmentService {
     const [updated] = await db('segment_definitions')
       .where({ id: segmentId, organization_id: organizationId, project_id: projectId, deleted_at: null })
       .update(updates)
-      .returning(['id', 'name', 'description', 'scale_type', 'scale_max', 'enum_values', 'display_order', 'is_archived']);
+      .returning([
+        'id', 'name', 'description',
+        'scale_type as scaleType', 'scale_max as scaleMax', 'enum_values as enumValues',
+        'display_order as displayOrder', 'is_archived as isArchived',
+      ]);
 
     return updated ?? null;
   }
@@ -107,7 +119,11 @@ export class SegmentService {
   async listTemplates() {
     return db('segment_definition_templates')
       .orderBy('display_order', 'asc')
-      .select('id', 'name', 'description', 'scale_type', 'scale_max', 'enum_values', 'display_order');
+      .select(
+        'id', 'name', 'description',
+        'scale_type as scaleType', 'scale_max as scaleMax', 'enum_values as enumValues',
+        'display_order as displayOrder'
+      );
   }
 
   // Creates project segments from a template, skipping any already present by name
@@ -117,7 +133,16 @@ export class SegmentService {
     templateId: string,
     actorId: string
   ) {
-    const template = await db('segment_definition_templates').where({ id: templateId }).first();
+    // enum_values is a jsonb column — `pg` already parses it into a JS array, so passing
+    // it through JSON.parse() (as this used to) throws on any ENUM-scale template, since
+    // JSON.parse expects a string, not an array.
+    const template = await db('segment_definition_templates')
+      .where({ id: templateId })
+      .first(
+        'id', 'name', 'description',
+        'scale_type as scaleType', 'scale_max as scaleMax', 'enum_values as enumValues',
+        'display_order as displayOrder'
+      );
     if (!template) throw Object.assign(new Error('Template not found'), { statusCode: 404 });
 
     const existing = await db('segment_definitions')
@@ -131,10 +156,10 @@ export class SegmentService {
     return this.createSegment(organizationId, projectId, {
       name: template.name,
       description: template.description,
-      scaleType: template.scale_type,
-      scaleMax: template.scale_max,
-      enumValues: template.enum_values ? JSON.parse(template.enum_values) : undefined,
-      displayOrder: template.display_order,
+      scaleType: template.scaleType,
+      scaleMax: template.scaleMax,
+      enumValues: template.enumValues ?? undefined,
+      displayOrder: template.displayOrder,
     }, actorId);
   }
 }

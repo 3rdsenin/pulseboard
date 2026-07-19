@@ -15,6 +15,8 @@ import syncRoutes from './routes/v1/sync.js';
 import dashboardRoutes from './routes/v1/dashboard.js';
 import ratingRoutes from './routes/v1/ratings.js';
 import segmentRoutes from './routes/v1/segments.js';
+import featureCategoryRoutes from './routes/v1/feature-categories.js';
+import shareRoutes from './routes/v1/share.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -66,7 +68,10 @@ export async function buildApp() {
   });
 
   await app.register(fastifyRateLimit, {
-    max: 100,
+    // The rate limiter shares its counter via Redis across every test file in a run (they
+    // all point at the same Redis instance), so a growing test suite can trip the real
+    // limit purely from test volume, not abuse. Only relaxed in NODE_ENV=test.
+    max: process.env.NODE_ENV === 'test' ? 100_000 : 100,
     timeWindow: '1 minute',
     redis,
   });
@@ -87,6 +92,8 @@ export async function buildApp() {
   await app.register(dashboardRoutes, { prefix: '/api/v1/projects' });
   await app.register(ratingRoutes, { prefix: '/api/v1/projects' });
   await app.register(segmentRoutes, { prefix: '/api/v1/projects' });
+  await app.register(featureCategoryRoutes, { prefix: '/api/v1/projects' });
+  await app.register(shareRoutes, { prefix: '/api/v1' });
 
   // Platform-level segment templates — auth required, no project scope
   app.get('/api/v1/segment-templates', {

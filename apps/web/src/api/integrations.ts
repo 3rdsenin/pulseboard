@@ -1,5 +1,5 @@
 import { api } from './client.js';
-import type { CreateIntegrationInput, TestConnectionInput } from '@pulseboard/shared';
+import type { CreateIntegrationInput, UpdateIntegrationInput, TestConnectionInput } from '@pulseboard/shared';
 
 export interface Integration {
   id: string;
@@ -28,4 +28,7 @@ export const integrationsApi = {
 
   delete: (projectId: string, integrationId: string) =>
     api.delete(`projects/${projectId}/integrations/${integrationId}`),
+
+  update: (projectId: string, integrationId: string, input: UpdateIntegrationInput) =>
+    api.patch(`projects/${projectId}/integrations/${integrationId}`, { json: input }).json<Integration>(),
 };

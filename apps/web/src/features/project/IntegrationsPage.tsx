@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { integrationsApi, type ConnectionResult } from '../../api/integrations.js';
+import { integrationsApi, type ConnectionResult, type Integration } from '../../api/integrations.js';
+import { syncApi } from '../../api/sync.js';
 import { extractApiError } from '../../api/client.js';
 import { Button } from '../../components/Button.js';
 import { Input } from '../../components/Input.js';
@@ -26,7 +27,15 @@ export function IntegrationsPage() {
     enabled: !!projectId,
   });
 
+  const { data: syncJobs, isLoading: isLoadingSync } = useQuery({
+    queryKey: ['sync-jobs', projectId],
+    queryFn: () => syncApi.listJobs(projectId!),
+    enabled: !!projectId,
+    refetchInterval: 5000,
+  });
+
   const [type, setType] = useState<IntegrationType>('JIRA');
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [baseUrl, setBaseUrl] = useState('');
   const [projectKey, setProjectKey] = useState('');
   const [boardId, setBoardId] = useState('');
@@ -64,6 +73,7 @@ export function IntegrationsPage() {
   }
 
   function resetForm() {
+    setEditingId(null);
     setBaseUrl('');
     setProjectKey('');
     setBoardId('');
@@ -73,6 +83,25 @@ export function IntegrationsPage() {
     setPersonalAccessToken('');
     setTestResult(null);
     setFormError(null);
+  }
+
+  function startEdit(integration: Integration) {
+    setEditingId(integration.id);
+    setType(integration.type as IntegrationType);
+    setFormError(null);
+    setTestResult(null);
+
+    const config = integration.config || {};
+    if (integration.type === 'JIRA') {
+      setBaseUrl((config.baseUrl as string) || '');
+      setProjectKey((config.projectKey as string) || '');
+      setBoardId((config.boardId as string) || '');
+      setEmail('');
+      setApiToken('');
+    } else {
+      setRepos(((config.repos as string[]) || []).join(', '));
+      setPersonalAccessToken('');
+    }
   }
 
   const testConnection = useMutation({
@@ -89,6 +118,32 @@ export function IntegrationsPage() {
     },
     onError: async (error) => setFormError(await extractApiError(error)),
   });
+
+  const updateIntegration = useMutation({
+    mutationFn: () => integrationsApi.update(projectId!, editingId!, buildPayload()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['integrations', projectId] });
+      resetForm();
+    },
+    onError: async (error) => setFormError(await extractApiError(error)),
+  });
+
+  const deleteIntegration = useMutation({
+    mutationFn: (id: string) => integrationsApi.delete(projectId!, id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['integrations', projectId] });
+    },
+    onError: async (error) => setFormError(await extractApiError(error)),
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingId) {
+      updateIntegration.mutate();
+    } else {
+      createIntegration.mutate();
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -128,9 +183,34 @@ export function IntegrationsPage() {
                       <p className="mt-1 text-xs text-red-600">{integration.last_error}</p>
                     )}
                   </div>
-                  <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusStyles[integration.status]}`}>
-                    {integration.status}
-                  </span>
+                  <div className="flex items-center gap-4">
+                    <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusStyles[integration.status]}`}>
+                      {integration.status}
+                    </span>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => startEdit(integration)}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="danger"
+                        size="sm"
+                        loading={deleteIntegration.isPending}
+                        onClick={() => {
+                          if (confirm(`Are you sure you want to remove this ${integration.type} integration?`)) {
+                            deleteIntegration.mutate(integration.id);
+                          }
+                        }}
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  </div>
                 </CardBody>
               </Card>
             ))}
@@ -139,33 +219,37 @@ export function IntegrationsPage() {
 
         <Card>
           <CardHeader>
-            <h3 className="font-medium text-gray-900">Add integration</h3>
+            <h3 className="font-medium text-gray-900">
+              {editingId ? `Edit ${type} Integration` : 'Add integration'}
+            </h3>
           </CardHeader>
           <CardBody>
-            <div className="mb-4 flex gap-2">
-              <Button
-                type="button"
-                variant={type === 'JIRA' ? 'primary' : 'secondary'}
-                size="sm"
-                onClick={() => { setType('JIRA'); setTestResult(null); }}
-              >
-                Jira
-              </Button>
-              <Button
-                type="button"
-                variant={type === 'GITHUB' ? 'primary' : 'secondary'}
-                size="sm"
-                onClick={() => { setType('GITHUB'); setTestResult(null); }}
-              >
-                GitHub
-              </Button>
-            </div>
+            {!editingId && (
+              <div className="mb-4 flex gap-2">
+                <Button
+                  type="button"
+                  variant={type === 'JIRA' ? 'primary' : 'secondary'}
+                  size="sm"
+                  onClick={() => { setType('JIRA'); setTestResult(null); }}
+                >
+                  Jira
+                </Button>
+                <Button
+                  type="button"
+                  variant={type === 'GITHUB' ? 'primary' : 'secondary'}
+                  size="sm"
+                  onClick={() => { setType('GITHUB'); setTestResult(null); }}
+                >
+                  GitHub
+                </Button>
+              </div>
+            )}
 
             {formError && (
               <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{formError}</p>
             )}
 
-            <div className="flex flex-col gap-4">
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
               {type === 'JIRA' ? (
                 <>
                   <Input
@@ -188,14 +272,14 @@ export function IntegrationsPage() {
                   />
                   <Input
                     label="Email"
-                    hint="The Atlassian account email the API token belongs to"
+                    hint={editingId ? 'Leave blank to keep current' : 'The Atlassian account email the API token belongs to'}
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                   />
                   <Input
                     label="API token"
-                    hint="Create one at id.atlassian.com/manage-profile/security/api-tokens"
+                    hint={editingId ? 'Leave blank to keep current' : 'Create one at id.atlassian.com/manage-profile/security/api-tokens'}
                     type="password"
                     value={apiToken}
                     onChange={(e) => setApiToken(e.target.value)}
@@ -211,7 +295,7 @@ export function IntegrationsPage() {
                   />
                   <Input
                     label="Personal access token"
-                    hint="A GitHub token with repo read access"
+                    hint={editingId ? 'Leave blank to keep current' : 'A GitHub token with repo read access'}
                     type="password"
                     value={personalAccessToken}
                     onChange={(e) => setPersonalAccessToken(e.target.value)}
@@ -235,17 +319,109 @@ export function IntegrationsPage() {
                   Test connection
                 </Button>
                 <Button
-                  type="button"
-                  loading={createIntegration.isPending}
-                  onClick={() => createIntegration.mutate()}
+                  type="submit"
+                  loading={createIntegration.isPending || updateIntegration.isPending}
                 >
-                  Save integration
+                  {editingId ? 'Update Integration' : 'Save integration'}
                 </Button>
+                {editingId && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={resetForm}
+                  >
+                    Cancel
+                  </Button>
+                )}
               </div>
+            </form>
+          </CardBody>
+        </Card>
+
+        {/* Sync History Table */}
+        <Card className="mt-8">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <h3 className="font-medium text-gray-900 text-sm">Sync History (Last 20 Runs)</h3>
+              {isLoadingSync && <Spinner size="sm" />}
             </div>
+          </CardHeader>
+          <CardBody>
+            {isLoadingSync && !syncJobs ? (
+              <div className="flex justify-center py-6">
+                <Spinner size="md" />
+              </div>
+            ) : !syncJobs || syncJobs.length === 0 ? (
+              <p className="text-xs text-gray-500 text-center py-6">No sync history found for this project.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs text-gray-500 border-collapse">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-200 text-gray-700 uppercase font-semibold text-[9px]">
+                      <th className="px-4 py-2">Job ID</th>
+                      <th className="px-4 py-2">Type</th>
+                      <th className="px-4 py-2">Trigger</th>
+                      <th className="px-4 py-2">Status</th>
+                      <th className="px-4 py-2">Records</th>
+                      <th className="px-4 py-2">Started</th>
+                      <th className="px-4 py-2">Duration</th>
+                      <th className="px-4 py-2">Errors / Details</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {syncJobs.map((job) => {
+                      const duration = job.startedAt && job.completedAt
+                        ? `${Math.round((new Date(job.completedAt).getTime() - new Date(job.startedAt).getTime()) / 1000)}s`
+                        : '—';
+
+                      return (
+                        <tr key={job.id} className="hover:bg-gray-50/30">
+                          <td className="px-4 py-2 font-mono font-semibold text-[9px] text-gray-400">
+                            {job.id.slice(0, 8)}
+                          </td>
+                          <td className="px-4 py-2 font-medium text-gray-900">
+                            {job.type}
+                          </td>
+                          <td className="px-4 py-2 text-gray-500 text-[10px]">
+                            {job.triggeredBy}
+                          </td>
+                          <td className="px-4 py-2">
+                            <span
+                              className={[
+                                'inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-semibold border',
+                                job.status === 'SUCCESS'
+                                  ? 'bg-green-50 text-green-700 border-green-200'
+                                  : job.status === 'FAILED'
+                                  ? 'bg-red-50 text-red-700 border-red-200'
+                                  : 'bg-blue-50 text-blue-700 border-blue-200',
+                              ].join(' ')}
+                            >
+                              {job.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2 font-mono">
+                            {job.recordsProcessed ?? '—'}
+                          </td>
+                          <td className="px-4 py-2 text-gray-500 text-[10px]">
+                            {job.startedAt ? new Date(job.startedAt).toLocaleString() : '—'}
+                          </td>
+                          <td className="px-4 py-2 font-mono text-gray-900 text-[10px]">
+                            {duration}
+                          </td>
+                          <td className="px-4 py-2 text-red-600 truncate max-w-xs text-[10px]" title={job.errorMessage || undefined}>
+                            {job.errorMessage || '—'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </CardBody>
         </Card>
       </main>
     </div>
   );
 }
+

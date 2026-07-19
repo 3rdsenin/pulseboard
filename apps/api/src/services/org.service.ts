@@ -100,13 +100,27 @@ export class OrgService {
     }
 
     await db.transaction(async (trx) => {
-      await trx('organization_members').insert({
-        id: uuidv4(),
-        organization_id: invite.organization_id,
-        user_id: userId,
-        role: invite.role,
-        invited_by: null,
-      });
+      // organization_members has a unique (organization_id, user_id) constraint with no
+      // deleted_at exclusion — a previously removed member must be revived, not
+      // re-inserted, or this throws a unique-violation 500 on re-invite.
+      const existing = await trx('organization_members')
+        .where({ organization_id: invite.organization_id, user_id: userId })
+        .first('id');
+
+      if (existing) {
+        await trx('organization_members')
+          .where({ id: existing.id })
+          .update({ role: invite.role, deleted_at: null, created_at: trx.fn.now() });
+      } else {
+        await trx('organization_members').insert({
+          id: uuidv4(),
+          organization_id: invite.organization_id,
+          user_id: userId,
+          role: invite.role,
+          invited_by: null,
+        });
+      }
+
       await trx('invite_tokens')
         .where({ id: invite.id })
         .update({ accepted_at: trx.fn.now() });

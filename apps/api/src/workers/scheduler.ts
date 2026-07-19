@@ -19,14 +19,22 @@ export async function enqueueFullSync(
   const jiraIntegration = integrations.find((i) => i.type === 'JIRA');
   const githubIntegration = integrations.find((i) => i.type === 'GITHUB');
 
-  const activeSprint = await db('sprints')
-    .where({ project_id: projectId, state: 'ACTIVE' })
-    .first('id');
+  // Metrics are recomputed for the active sprint every time (its data keeps changing)
+  // plus any closed/future sprint that has never had metrics computed at all — otherwise
+  // a sprint that closes without ever being synced while active would show no metrics forever.
+  const sprintsNeedingMetrics = await db('sprints as s')
+    .where('s.project_id', projectId)
+    .where((qb) => {
+      qb.where('s.state', 'ACTIVE').orWhereNotExists(
+        db('contributor_sprint_metrics as csm').whereRaw('csm.sprint_id = s.id')
+      );
+    })
+    .select('s.id');
 
   // Create sync job records before enqueueing so the UI can show "PENDING" immediately
   const jiraSyncJobId = jiraIntegration ? uuidv4() : null;
   const githubSyncJobId = githubIntegration ? uuidv4() : null;
-  const metricsJobId = activeSprint ? uuidv4() : null;
+  const metricsJobs = sprintsNeedingMetrics.map((sprint) => ({ sprintId: sprint.id, syncJobId: uuidv4() }));
 
   const jobRecords = [
     jiraIntegration && jiraSyncJobId && {
@@ -47,15 +55,15 @@ export async function enqueueFullSync(
       triggered_by: triggeredBy,
       triggered_by_user_id: triggeredByUserId ?? null,
     },
-    activeSprint && metricsJobId && {
-      id: metricsJobId,
+    ...metricsJobs.map(({ syncJobId }) => ({
+      id: syncJobId,
       organization_id: organizationId,
       project_id: projectId,
       type: 'COMPUTE_METRICS',
       status: 'PENDING',
       triggered_by: triggeredBy,
       triggered_by_user_id: triggeredByUserId ?? null,
-    },
+    })),
   ].filter(Boolean);
 
   if (jobRecords.length > 0) {
@@ -83,18 +91,18 @@ export async function enqueueFullSync(
     });
   }
 
-  if (activeSprint && metricsJobId) {
-    // Metrics job runs on a 60s delay — gives sync workers time to finish.
-    // A proper dependency graph (BullMQ Flow) is the production upgrade path here.
+  // Metrics jobs run on a 60s delay — gives sync workers time to finish.
+  // A proper dependency graph (BullMQ Flow) is the production upgrade path here.
+  for (const { sprintId, syncJobId } of metricsJobs) {
     await metricsQueue.add('compute-metrics', {
       projectId,
       organizationId,
-      sprintId: activeSprint.id,
-      syncJobId: metricsJobId,
+      sprintId,
+      syncJobId,
     }, { delay: 60_000 });
   }
 
-  return { jiraSyncJobId, githubSyncJobId, metricsJobId };
+  return { jiraSyncJobId, githubSyncJobId, metricsJobIds: metricsJobs.map((j) => j.syncJobId) };
 }
 
 // Called at app startup on the worker process to start the nightly scheduler

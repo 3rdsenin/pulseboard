@@ -73,7 +73,13 @@ export class DashboardService {
     return db('sprints')
       .where({ organization_id: organizationId, project_id: projectId })
       .orderBy('start_date', 'desc')
-      .select('id', 'name', 'state', 'start_date', 'end_date', 'complete_date', 'goal', 'synced_at');
+      .select(
+        'id', 'name', 'state', 'goal',
+        'start_date as startDate',
+        'end_date as endDate',
+        'complete_date as completeDate',
+        'synced_at as syncedAt'
+      );
   }
 
   async getSprintMetrics(organizationId: string, projectId: string, sprintId: string) {
@@ -128,5 +134,141 @@ export class DashboardService {
         sprint_id: sprintId,
       })
       .select('external_key', 'summary', 'status', 'issue_type', 'priority', 'labels', 'updated_date');
+  }
+
+  // Returns paginated, filterable list of all project issues
+  async getProjectIssues(
+    organizationId: string,
+    projectId: string,
+    filters: {
+      status?: string;
+      type?: string;
+      priority?: string;
+      assigneeId?: string;
+      sprintId?: string;
+      q?: string;
+      page?: number;
+      perPage?: number;
+    }
+  ) {
+    const page = Math.max(1, filters.page ?? 1);
+    const perPage = Math.min(100, Math.max(1, filters.perPage ?? 50));
+    const offset = (page - 1) * perPage;
+
+    const baseQuery = db('issue_snapshots')
+      .where({
+        organization_id: organizationId,
+        project_id: projectId,
+      });
+
+    if (filters.status) {
+      baseQuery.where({ status: filters.status });
+    }
+    if (filters.type) {
+      baseQuery.where({ issue_type: filters.type });
+    }
+    if (filters.priority) {
+      baseQuery.where({ priority: filters.priority });
+    }
+    if (filters.assigneeId) {
+      baseQuery.where({ assignee_contributor_id: filters.assigneeId });
+    }
+    if (filters.sprintId) {
+      if (filters.sprintId === 'NULL') {
+        baseQuery.whereNull('sprint_id');
+      } else {
+        baseQuery.where({ sprint_id: filters.sprintId });
+      }
+    }
+    if (filters.q) {
+      const search = `%${filters.q}%`;
+      baseQuery.where((builder) => {
+        builder.where('summary', 'ILike', search)
+               .orWhere('external_key', 'ILike', search);
+      });
+    }
+
+    const totalResult = await baseQuery.clone().count('id as count').first();
+    const total = Number(totalResult?.count ?? 0);
+
+    const issues = await baseQuery
+      .select(
+        'id',
+        'external_key as key',
+        'summary',
+        'status',
+        'issue_type as type',
+        'priority',
+        'assignee_contributor_id as assigneeId',
+        'sprint_id as sprintId',
+        'updated_date as updatedAt'
+      )
+      .orderBy('updated_date', 'desc')
+      .orderBy('external_key', 'asc')
+      .offset(offset)
+      .limit(perPage);
+
+    return {
+      data: issues,
+      meta: {
+        total,
+        page,
+        perPage,
+        hasMore: offset + issues.length < total,
+      },
+    };
+  }
+
+  // Compiles feature category total and completion statistics
+  async getFeatureBreakdown(
+    organizationId: string,
+    projectId: string,
+    sprintId?: string
+  ) {
+    const categories = await db('feature_categories')
+      .where({
+        organization_id: organizationId,
+        project_id: projectId,
+        deleted_at: null,
+      })
+      .orderBy('display_order', 'asc')
+      .select('id', 'name', 'color');
+
+    const result = [];
+
+    for (const cat of categories) {
+      const query = db('issue_snapshots')
+        .where({
+          organization_id: organizationId,
+          project_id: projectId,
+          feature_category_id: cat.id,
+        });
+
+      if (sprintId) {
+        query.where({ sprint_id: sprintId });
+      }
+
+      const counts = await query
+        .select(
+          db.raw('COUNT(*) as total'),
+          db.raw(`SUM(CASE WHEN status ILIKE '%done%' OR status ILIKE '%closed%' THEN 1 ELSE 0 END) as done`)
+        )
+        .first();
+
+      const total = Number(counts?.total ?? 0);
+      const done = Number(counts?.done ?? 0);
+      const completionRate = total > 0 ? Number((done / total).toFixed(4)) : 0;
+
+      result.push({
+        id: cat.id,
+        name: cat.name,
+        color: cat.color,
+        total,
+        done,
+        completionRate,
+      });
+    }
+
+    return result;
   }
 }

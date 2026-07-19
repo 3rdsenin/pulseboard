@@ -21,9 +21,19 @@ export interface RequestContext {
   orgRole: 'ORG_ADMIN' | 'ORG_MEMBER';
 }
 
+// Attached by share.ts's resolveShareToken preHandler once a share token has been
+// resolved to a project (and, for private links, an authorised org member).
+export interface ShareProjectContext {
+  organizationId: string;
+  projectId: string;
+  name: string;
+  isPublic: boolean;
+}
+
 // Augment Fastify's Request type so request.context is typed everywhere
 declare module 'fastify' {
   interface FastifyRequest {
     context: RequestContext;
+    projectContext?: ShareProjectContext;
   }
 }

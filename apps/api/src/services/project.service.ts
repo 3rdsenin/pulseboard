@@ -119,10 +119,20 @@ export class ProjectService {
     }
 
     const existing = await db('project_members')
-      .where({ project_id: projectId, user_id: userId, deleted_at: null })
-      .first('id');
-    if (existing) {
+      .where({ project_id: projectId, user_id: userId })
+      .first('id', 'deleted_at');
+    if (existing && !existing.deleted_at) {
       throw Object.assign(new Error('User is already a member of this project'), { statusCode: 409 });
+    }
+
+    // project_members has a unique (project_id, user_id) constraint with no deleted_at
+    // exclusion, so a previously removed member must be revived, not re-inserted, or the
+    // insert throws a unique-violation 500 the next time they're added back.
+    if (existing) {
+      await db('project_members')
+        .where({ id: existing.id })
+        .update({ role, deleted_at: null, created_by: actorId, created_at: db.fn.now() });
+      return;
     }
 
     await db('project_members').insert({

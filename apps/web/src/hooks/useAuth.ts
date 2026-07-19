@@ -11,6 +11,7 @@ interface AuthState {
   initialise: () => Promise<void>;
   login: (accessToken: string, user: User) => void;
   logout: () => Promise<void>;
+  switchOrg: (organizationId: string) => Promise<void>;
 }
 
 export const useAuth = create<AuthState>((set) => ({
@@ -61,5 +62,17 @@ export const useAuth = create<AuthState>((set) => ({
     await authApi.logout();
     clearAccessToken();
     set({ isAuthenticated: false, user: null });
+  },
+
+  switchOrg: async (organizationId) => {
+    const result = await authApi.switchOrg(organizationId);
+    setAccessToken(result.accessToken);
+    set((state) => ({
+      user: state.user && {
+        ...state.user,
+        organizationId: result.organizationId,
+        orgRole: result.orgRole,
+      },
+    }));
   },
 }));

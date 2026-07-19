@@ -12,6 +12,10 @@ export interface Project {
   slug: string;
   syncCron: string;
   lastSyncedAt: string | null;
+  settings?: {
+    shareToken?: string;
+    isPublic?: boolean;
+  };
   createdAt: string;
 }
 

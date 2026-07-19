@@ -82,6 +82,42 @@ export class AuthService {
     };
   }
 
+  // A user's JWT is always scoped to a single organisation (login() picks the oldest
+  // membership). Without this, a user invited into a second org after registering
+  // could never obtain a token scoped to it — their own org from registration is
+  // always older. listOrganizations()/switchOrganization() let the frontend show a
+  // picker and reissue a token for whichever membership the user selects.
+  async listOrganizations(userId: string) {
+    return db('organization_members as om')
+      .join('organizations as o', 'o.id', 'om.organization_id')
+      .where({ 'om.user_id': userId, 'om.deleted_at': null, 'o.deleted_at': null })
+      .orderBy('om.created_at', 'asc')
+      .select('o.id as organizationId', 'o.name', 'om.role as orgRole');
+  }
+
+  async switchOrganization(userId: string, organizationId: string) {
+    const user = await db('users').where({ id: userId, deleted_at: null }).first('id', 'email', 'name');
+    if (!user) {
+      throw Object.assign(new Error('User not found'), { statusCode: 401 });
+    }
+
+    const membership = await db('organization_members')
+      .where({ user_id: userId, organization_id: organizationId, deleted_at: null })
+      .first('organization_id', 'role');
+
+    if (!membership) {
+      throw Object.assign(new Error('You are not a member of that organisation'), { statusCode: 403 });
+    }
+
+    return {
+      userId: user.id,
+      email: user.email,
+      name: user.name,
+      organizationId: membership.organization_id,
+      orgRole: membership.role as 'ORG_ADMIN' | 'ORG_MEMBER',
+    };
+  }
+
   async createRefreshJti(userId: string): Promise<string> {
     const jti = randomBytes(32).toString('hex');
     // jti lives in Redis only — there is no refresh_tokens table. A Redis flush

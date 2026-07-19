@@ -15,5 +15,10 @@ export const LoginSchema = z.object({
 
 export const RefreshSchema = z.object({});
 
+export const SwitchOrgSchema = z.object({
+  organizationId: z.string().uuid(),
+});
+
 export type RegisterInput = z.infer<typeof RegisterSchema>;
 export type LoginInput = z.infer<typeof LoginSchema>;
+export type SwitchOrgInput = z.infer<typeof SwitchOrgSchema>;

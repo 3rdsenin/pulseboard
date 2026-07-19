@@ -4,6 +4,7 @@ import { useAuth } from '../../hooks/useAuth.js';
 import { Card, CardBody, CardHeader } from '../../components/Card.js';
 import { Spinner } from '../../components/Spinner.js';
 import { Button } from '../../components/Button.js';
+import { OrgSwitcher } from '../../components/OrgSwitcher.js';
 import { Link } from 'react-router-dom';
 
 export function DashboardPage() {
@@ -22,6 +23,13 @@ export function DashboardPage() {
         <div className="mx-auto flex max-w-7xl items-center justify-between">
           <h1 className="text-lg font-semibold text-gray-900">PulseBoard</h1>
           <div className="flex items-center gap-4">
+            <OrgSwitcher />
+            <Link to="/settings/profile" className="text-sm font-medium text-brand-600 hover:underline">
+              My Profile
+            </Link>
+            <Link to="/settings/org" className="text-sm font-medium text-brand-600 hover:underline">
+              Org Settings
+            </Link>
             <span className="text-sm text-gray-600">{user?.email}</span>
             <Button variant="ghost" size="sm" onClick={() => logout()}>
               Sign out

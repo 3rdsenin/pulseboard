@@ -23,6 +23,9 @@ export interface SegmentTemplate {
   scaleMax: number | null;
   enumValues: string[] | null;
   displayOrder: number;
+  // Only present on real project segments (GET .../segments) — platform templates
+  // (GET /segment-templates) don't have an archived state of their own.
+  isArchived?: boolean;
 }
 
 export const ratingsApi = {
@@ -52,6 +55,39 @@ export const ratingsApi = {
   listTemplates: () =>
     api.get('segment-templates').json<SegmentTemplate[]>(),
 
-  listSegments: (projectId: string) =>
-    api.get(`projects/${projectId}/segments`).json<SegmentTemplate[]>(),
+  listSegments: (projectId: string, includeArchived = false) =>
+    api.get(`projects/${projectId}/segments`, {
+      searchParams: { includeArchived: String(includeArchived) }
+    }).json<SegmentTemplate[]>(),
+
+  createSegment: (projectId: string, input: CreateSegmentInput) =>
+    api.post(`projects/${projectId}/segments`, { json: input }).json<SegmentTemplate>(),
+
+  createFromTemplate: (projectId: string, templateId: string) =>
+    api.post(`projects/${projectId}/segments/from-template`, { json: { templateId } }).json<SegmentTemplate>(),
+
+  updateSegment: (projectId: string, segmentId: string, input: UpdateSegmentInput) =>
+    api.patch(`projects/${projectId}/segments/${segmentId}`, { json: input }).json<SegmentTemplate>(),
+
+  deleteSegment: (projectId: string, segmentId: string) =>
+    api.delete(`projects/${projectId}/segments/${segmentId}`),
 };
+
+export interface CreateSegmentInput {
+  name: string;
+  description?: string;
+  scaleType: 'NUMERIC' | 'ENUM';
+  scaleMax?: number;
+  enumValues?: string[];
+  displayOrder?: number;
+}
+
+export interface UpdateSegmentInput {
+  name?: string;
+  description?: string;
+  scaleType?: 'NUMERIC' | 'ENUM';
+  scaleMax?: number;
+  enumValues?: string[];
+  displayOrder?: number;
+  isArchived?: boolean;
+}

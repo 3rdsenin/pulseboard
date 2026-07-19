@@ -21,4 +21,22 @@ export const authApi = {
 
   logout: () =>
     api.post('auth/logout').json<{ ok: boolean }>().catch(() => null),
+
+  getMe: () =>
+    api.get('auth/me').json<{ id: string; name: string; email: string; githubUsername: string | null }>(),
+
+  updateMe: (input: { name?: string; githubUsername?: string | null }) =>
+    api.patch('auth/me', { json: input }).json<{ id: string; name: string; email: string; githubUsername: string | null }>(),
+
+  // Every org the caller belongs to — used to show an org switcher when there's more than one.
+  listOrganizations: () =>
+    api.get('auth/organizations').json<Array<{ organizationId: string; name: string; orgRole: 'ORG_ADMIN' | 'ORG_MEMBER' }>>(),
+
+  // Reissues a token scoped to a different membership (see AuthService.switchOrganization).
+  switchOrg: (organizationId: string) =>
+    api.post('auth/switch-org', { json: { organizationId } }).json<{
+      accessToken: string;
+      organizationId: string;
+      orgRole: 'ORG_ADMIN' | 'ORG_MEMBER';
+    }>(),
 };

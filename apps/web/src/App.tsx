@@ -8,6 +8,14 @@ import { DashboardPage } from './features/dashboard/DashboardPage.js';
 import { ProjectPage } from './features/project/ProjectPage.js';
 import { NewProjectPage } from './features/project/NewProjectPage.js';
 import { IntegrationsPage } from './features/project/IntegrationsPage.js';
+import { SprintRatingsPage } from './features/project/SprintRatingsPage.js';
+import { ContributorsPage } from './features/project/ContributorsPage.js';
+import { SegmentsPage } from './features/project/SegmentsPage.js';
+import { FeatureCategoriesPage } from './features/project/FeatureCategoriesPage.js';
+import { ShareDashboardPage } from './features/project/ShareDashboardPage.js';
+import { OrgSettingsPage } from './features/dashboard/OrgSettingsPage.js';
+import { ProjectSettingsPage } from './features/project/ProjectSettingsPage.js';
+import { UserProfilePage } from './features/dashboard/UserProfilePage.js';
 import { Spinner } from './components/Spinner.js';
 
 const queryClient = new QueryClient({
@@ -68,6 +76,15 @@ function AppRoutes() {
       <Route path="/projects/new" element={<RequireAuth><NewProjectPage /></RequireAuth>} />
       <Route path="/projects/:projectId" element={<RequireAuth><ProjectPage /></RequireAuth>} />
       <Route path="/projects/:projectId/integrations" element={<RequireAuth><IntegrationsPage /></RequireAuth>} />
+      <Route path="/projects/:projectId/contributors" element={<RequireAuth><ContributorsPage /></RequireAuth>} />
+      <Route path="/projects/:projectId/segments" element={<RequireAuth><SegmentsPage /></RequireAuth>} />
+      <Route path="/projects/:projectId/feature-categories" element={<RequireAuth><FeatureCategoriesPage /></RequireAuth>} />
+      <Route path="/projects/:projectId/sprints/:sprintId/ratings" element={<RequireAuth><SprintRatingsPage /></RequireAuth>} />
+      <Route path="/projects/:projectId/settings" element={<RequireAuth><ProjectSettingsPage /></RequireAuth>} />
+      <Route path="/settings/org" element={<RequireAuth><OrgSettingsPage /></RequireAuth>} />
+      <Route path="/settings/profile" element={<RequireAuth><UserProfilePage /></RequireAuth>} />
+
+      <Route path="/s/:shareToken" element={<ShareDashboardPage />} />
 
       {/* Catch-all: redirect unknown paths to dashboard (which will itself redirect to login if not authenticated) */}
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

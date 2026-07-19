@@ -17,8 +17,11 @@ export class SyncService {
       .orderBy('created_at', 'desc')
       .limit(limit)
       .select(
-        'id', 'type', 'status', 'triggered_by', 'triggered_by_user_id',
-        'started_at', 'completed_at', 'records_processed', 'error_message', 'created_at'
+        'id', 'type', 'status',
+        'triggered_by as triggeredBy', 'triggered_by_user_id as triggeredByUserId',
+        'started_at as startedAt', 'completed_at as completedAt',
+        'records_processed as recordsProcessed', 'error_message as errorMessage',
+        'created_at as createdAt'
       );
   }
 
@@ -26,8 +29,11 @@ export class SyncService {
     return db('sync_jobs')
       .where({ id: syncJobId, organization_id: organizationId })
       .first(
-        'id', 'type', 'status', 'triggered_by',
-        'started_at', 'completed_at', 'records_processed', 'error_message', 'created_at'
+        'id', 'type', 'status',
+        'triggered_by as triggeredBy',
+        'started_at as startedAt', 'completed_at as completedAt',
+        'records_processed as recordsProcessed', 'error_message as errorMessage',
+        'created_at as createdAt'
       );
   }
 }

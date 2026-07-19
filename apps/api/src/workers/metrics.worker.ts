@@ -29,6 +29,36 @@ async function computeMetrics(job: Job<ComputeMetricsJobData>) {
     const sprint = await db('sprints').where({ id: sprintId }).first('start_date', 'end_date');
     if (!sprint) throw new Error('Sprint not found');
 
+    // Resolve issue feature categories
+    const categories = await db('feature_categories')
+      .where({ project_id: projectId, deleted_at: null })
+      .orderBy('display_order', 'asc')
+      .select('id', 'match_patterns');
+
+    const issues = await db('issue_snapshots')
+      .where({ project_id: projectId })
+      .select('id', 'external_key', 'labels');
+
+    for (const issue of issues) {
+      let matchedCategoryId: string | null = null;
+      for (const cat of categories) {
+        for (const pattern of cat.match_patterns) {
+          if (
+            issue.external_key.startsWith(pattern) ||
+            (issue.labels && issue.labels.some((l: string) => l.toLowerCase().includes(pattern.toLowerCase())))
+          ) {
+            matchedCategoryId = cat.id;
+            break;
+          }
+        }
+        if (matchedCategoryId) break;
+      }
+
+      await db('issue_snapshots')
+        .where({ id: issue.id })
+        .update({ feature_category_id: matchedCategoryId });
+    }
+
     // Collect per-contributor issue counts from issue_snapshots for this sprint period
     const rows: Array<{
       contributorId: string;

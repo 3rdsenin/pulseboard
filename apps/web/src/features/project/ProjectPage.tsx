@@ -8,6 +8,7 @@ import { extractApiError } from '../../api/client.js';
 import { useAuth } from '../../hooks/useAuth.js';
 import { SprintView } from './SprintView.js';
 import { ProjectOverview } from './ProjectOverview.js';
+import { ShareModal } from './ShareModal.js';
 import { Button } from '../../components/Button.js';
 import { Spinner } from '../../components/Spinner.js';
 
@@ -22,14 +23,19 @@ export function ProjectPage() {
   // otherwise the always-available All Issues overview (see displayView below).
   const [selectedView, setSelectedView] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [isShareOpen, setIsShareOpen] = useState(false);
 
   const triggerSync = useMutation({
-    mutationFn: () => syncApi.triggerSync(projectId!),
+    // Waits for the Jira sync job to actually finish (it writes the sprints table)
+    // instead of guessing a fixed delay before refetching. See api/sync.ts waitForJob.
+    mutationFn: async () => {
+      const result = await syncApi.triggerSync(projectId!);
+      if (result.jiraSyncJobId) await syncApi.waitForJob(projectId!, result.jiraSyncJobId);
+      return result;
+    },
     onSuccess: () => {
       setSyncError(null);
-      setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: ['sprints', projectId] });
-      }, 3000);
+      queryClient.invalidateQueries({ queryKey: ['sprints', projectId] });
     },
     onError: async (error) => setSyncError(await extractApiError(error)),
   });
@@ -39,6 +45,16 @@ export function ProjectPage() {
     queryFn: () => projectsApi.get(projectId!),
     enabled: !!projectId,
   });
+
+  const { data: projectMembers } = useQuery({
+    queryKey: ['project-members', projectId],
+    queryFn: () => projectsApi.listMembers(projectId!),
+    enabled: !!projectId,
+  });
+
+  const isOrgAdmin = user?.orgRole === 'ORG_ADMIN';
+  const member = projectMembers?.find((m) => m.userId === user?.userId);
+  const isProjectAdmin = isOrgAdmin || member?.role === 'PROJECT_ADMIN';
 
   const { data: sprints, isLoading: loadingSprints } = useQuery({
     queryKey: ['sprints', projectId],
@@ -80,13 +96,53 @@ export function ProjectPage() {
           </div>
           <div className="flex items-center gap-4">
             {projectId && (
-              <Link
-                to={`/projects/${projectId}/integrations`}
-                className="text-sm font-medium text-brand-600 hover:underline"
-              >
-                Integrations
-              </Link>
+              <>
+                <Link
+                  to={`/projects/${projectId}/contributors`}
+                  className="text-sm font-medium text-brand-600 hover:underline"
+                >
+                  Contributors
+                </Link>
+                <Link
+                  to={`/projects/${projectId}/segments`}
+                  className="text-sm font-medium text-brand-600 hover:underline"
+                >
+                  Segments
+                </Link>
+                <Link
+                  to={`/projects/${projectId}/feature-categories`}
+                  className="text-sm font-medium text-brand-600 hover:underline"
+                >
+                  Features
+                </Link>
+                <Link
+                  to={`/projects/${projectId}/integrations`}
+                  className="text-sm font-medium text-brand-600 hover:underline"
+                >
+                  Integrations
+                </Link>
+                {isProjectAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setIsShareOpen(true)}
+                    className="text-sm font-medium text-brand-600 hover:underline cursor-pointer"
+                  >
+                    Share
+                  </button>
+                )}
+                {isProjectAdmin && (
+                  <Link
+                    to={`/projects/${projectId}/settings`}
+                    className="text-sm font-medium text-brand-600 hover:underline"
+                  >
+                    Settings
+                  </Link>
+                )}
+              </>
             )}
+            <Link to="/settings/profile" className="text-sm font-medium text-brand-600 hover:underline">
+              My Profile
+            </Link>
             <span className="text-sm text-gray-600">{user?.email}</span>
             <Button variant="ghost" size="sm" onClick={() => logout()}>
               Sign out
@@ -176,6 +232,14 @@ export function ProjectPage() {
           />
         )}
       </main>
+
+      {projectId && (
+        <ShareModal
+          projectId={projectId}
+          isOpen={isShareOpen}
+          onClose={() => setIsShareOpen(false)}
+        />
+      )}
     </div>
   );
 }
